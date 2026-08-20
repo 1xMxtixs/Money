@@ -136,7 +136,7 @@ export default tseslint.config(
       '.atl/**',
       'next-env.d.ts',
       '**/*.d.ts',
-      'tests/lint-fixtures/**',
+      '**/__lint-fixtures__/**',
     ],
   },
 
