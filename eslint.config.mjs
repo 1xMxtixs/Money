@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactPlugin from 'eslint-plugin-react';
@@ -6,18 +7,12 @@ import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
 import importXPlugin from 'eslint-plugin-import-x';
 import nextPlugin from '@next/eslint-plugin-next';
 
-const ALL_FEATURES = [
-  'accounts',
-  'auth',
-  'budgets',
-  'categories',
-  'dashboard',
-  'goals',
-  'settings',
-  'stats',
-  'sync',
-  'transactions',
-];
+const ALL_FEATURES = fs.existsSync('features')
+  ? fs
+      .readdirSync('features', { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+  : [];
 
 const RECHARTS_PATHS = [
   {
@@ -141,6 +136,7 @@ export default tseslint.config(
       '.atl/**',
       'next-env.d.ts',
       '**/*.d.ts',
+      'tests/lint-fixtures/**',
     ],
   },
 
