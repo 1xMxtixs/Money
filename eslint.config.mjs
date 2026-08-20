@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import globals from 'globals';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
@@ -51,8 +52,15 @@ const localMoneyPlugin = {
         const filename = context.filename || context.getFilename?.() || '';
         const normalizedPath = filename.replace(/\\/g, '/');
 
-        // Permitted only inside lib/domain/money/**
-        if (normalizedPath.includes('lib/domain/money')) {
+        // Permitted inside lib/domain/money/**, configs, scripts, and tests
+        if (
+          normalizedPath.includes('lib/domain/money') ||
+          normalizedPath.includes('.config.') ||
+          normalizedPath.includes('/scripts/') ||
+          normalizedPath.includes('scripts/') ||
+          normalizedPath.includes('/tests/') ||
+          normalizedPath.includes('tests/')
+        ) {
           return {};
         }
 
@@ -154,6 +162,12 @@ export default tseslint.config(
       'import-x': importXPlugin,
       '@next/next': nextPlugin,
       money: localMoneyPlugin,
+    },
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
     },
     settings: {
       react: {

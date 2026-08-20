@@ -10,12 +10,15 @@ yarn-error.log*
 pnpm-debug.log*
 .pnpm-debug.log*
 
-# Next.js build output
+# Next.js build output & Test Artifacts
 .next/
 out/
 build/
 dist/
 *.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
 
 # Operating System Files
 .DS_Store
