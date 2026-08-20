@@ -20,6 +20,7 @@ pnpm-debug.log*
 out/
 build/
 dist/
+*.tsbuildinfo
 
 # Operating System Files
 .DS_Store
