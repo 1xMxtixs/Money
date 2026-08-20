@@ -33,3 +33,7 @@ desktop.ini
 
 # Antigravity CLI / Internal
 .atl/
+
+# Technical documentation and agent guide — private, kept out of the public repository
+docs/
+AGENTS.md
