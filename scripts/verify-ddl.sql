@@ -1,21 +1,22 @@
 -- ============================================================
 -- Money — DDL Verification Script (PostgreSQL 15)
 -- ============================================================
--- Tests:
--- 1. Full schema creation (tables, constraints, triggers, indexes)
--- 2. Data seeding (user, invitation, account, category, recurring_rule,
---    transactions, budget, goal, goal_contribution, session, reset token)
--- 3. Deletion of user (DELETE FROM users)
--- 4. Verification that all user-owned rows are deleted and invitation
---    redeemed_by is set to NULL without violating constraints.
+-- Purpose:
+-- 1. Validate full DDL creation in an isolated schema (verify_ddl).
+-- 2. Confirm generated columns (including budgets.category_kind STORED constant).
+-- 3. Seed complete user graph (account, category, rule, txs, budget, goal, contrib).
+-- 4. Execute cascading account deletion (DELETE FROM users).
+-- 5. Verify total data cleanup & invitation orphan preservation (redeemed_by = NULL).
+-- 6. Guarantee zero persistent side effects (ends with ROLLBACK).
 -- ============================================================
 
 \set ON_ERROR_STOP on
 
 BEGIN;
 
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
+-- 1. Isolated schema guardrail
+CREATE SCHEMA IF NOT EXISTS verify_ddl;
+SET search_path TO verify_ddl;
 
 -- ---------- Catálogos ----------
 
@@ -528,7 +529,7 @@ INSERT INTO transactions (
     '018d0000-0000-7000-8000-000000000099'
 );
 
--- 9. Presupuesto mensual
+-- 9. Presupuesto mensual (prueba de columna generada category_kind)
 INSERT INTO budgets (
     id, user_id, category_id, amount_minor, currency_code, effective_from
 ) VALUES (
@@ -562,13 +563,32 @@ INSERT INTO goal_contributions (
 );
 
 -- ============================================================
+-- VERIFICACIÓN EXPLÍCITA DE GENERATED ALWAYS AS ('expense') STORED
+-- ============================================================
+
+DO $$
+DECLARE
+    v_budget_kind text;
+BEGIN
+    SELECT category_kind INTO v_budget_kind
+    FROM budgets
+    WHERE id = '018d0000-0000-7000-8000-000000000050';
+
+    IF v_budget_kind IS NULL OR v_budget_kind <> 'expense' THEN
+        RAISE EXCEPTION 'Verification failed: budgets.category_kind GENERATED ALWAYS AS ("expense") STORED did not generate "expense" (found: %)', v_budget_kind;
+    END IF;
+
+    RAISE NOTICE 'CONFIRMED: PostgreSQL 15 successfully generated budgets.category_kind = "%"', v_budget_kind;
+END $$;
+
+-- ============================================================
 -- EJECUCIÓN DE ELIMINACIÓN DE USUARIO (DELETE FROM users)
 -- ============================================================
 
 DELETE FROM users WHERE id = '018d0000-0000-7000-8000-000000000001';
 
 -- ============================================================
--- VERIFICACIÓN DE PURGA COMPLETA
+-- VERIFICACIÓN DE PURGA COMPLETA TRAS DELETE FROM users
 -- ============================================================
 
 DO $$
@@ -637,7 +657,8 @@ BEGIN
         RAISE EXCEPTION 'Verification failed: goal_contributions rows not deleted (count: %)', v_goal_contrib_count;
     END IF;
 
-    RAISE NOTICE 'SUCCESS: All tables verified. User % was completely deleted with all cascading child records, and invitation was preserved with redeemed_by=NULL.', v_target_user;
+    RAISE NOTICE 'CONFIRMED: All tables verified. User % was completely deleted with all cascading child records, and invitation was preserved with redeemed_by=NULL.', v_target_user;
 END $$;
 
-COMMIT;
+-- Guardrail: Rollback whole transaction to avoid leaving any schema/data changes
+ROLLBACK;
