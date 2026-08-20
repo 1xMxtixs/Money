@@ -30,7 +30,7 @@ La aplicación quedará disponible en [http://localhost:3000](http://localhost:3
 
 ## 3. Scripts disponibles
 
-- `npm run setup`: Instalación y configuración inicial desde un clonado limpio.
+- `npm run setup`: Instalación y configuración inicial desde un clonado limpio (en F0-01 ejecuta `npm install`; en F0-04 se amplía a migración y siembra de base de datos).
 - `npm run dev`: Inicia el servidor de desarrollo de Next.js en modo local.
 - `npm run build`: Compila y genera el paquete de producción.
 - `npm run start`: Inicia el servidor compilado de producción.
