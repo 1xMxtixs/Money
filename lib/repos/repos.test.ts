@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Client } from 'pg';
-import fs from 'node:fs';
-import path from 'node:path';
+import { inArray } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
 import { usersRepo, sessionsRepo, unscopedFindSessionByTokenHash } from './index';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -57,58 +57,49 @@ describe('Repository Layer User Scoping & Type Safety (AD-11 / F0-05)', () => {
   });
 
   describe.runIf(Boolean(databaseUrl))('Database Integration & Scope Isolation (PostgreSQL)', () => {
-    let client: Client;
-    const testSchemaName = `test_f0_05_${Date.now()}`;
-    const userAId = '018d0000-0000-7000-8000-0000000000a1';
-    const userBId = '018d0000-0000-7000-8000-0000000000b2';
-    const sessionA1Id = '018d0000-0000-7000-8000-0000000000s1';
-    const sessionA2Id = '018d0000-0000-7000-8000-0000000000s2';
-    const sessionB1Id = '018d0000-0000-7000-8000-0000000000s3';
-    const tokenHashA1 = 'token_hash_a1_valid';
-    const tokenHashB1 = 'token_hash_b1_valid';
+    const userAId = '018d0000-0000-7000-8000-000000000001';
+    const userBId = '018d0000-0000-7000-8000-000000000002';
+    const sessionA1Id = '018d0000-0000-7000-8000-000000000011';
+    const sessionA2Id = '018d0000-0000-7000-8000-000000000012';
+    const sessionB1Id = '018d0000-0000-7000-8000-000000000021';
+    const tokenHashA1 = 'token_hash_a1_valid_64_characters_long_sha256_mocked_value_aaaa1111';
+    const tokenHashB1 = 'token_hash_b1_valid_64_characters_long_sha256_mocked_value_bbbb2222';
 
     beforeAll(async () => {
-      client = new Client({ connectionString: databaseUrl });
-      await client.connect();
+      // Clean up previous run data if existing
+      await db.delete(users).where(inArray(users.id, [userAId, userBId]));
 
-      await client.query(`CREATE SCHEMA ${testSchemaName}`);
-      await client.query(`SET search_path TO ${testSchemaName}, public`);
-
-      const migrationPath = path.resolve(process.cwd(), 'drizzle/0000_init.sql');
-      const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-      const statements = migrationSql
-        .split('--> statement-breakpoint')
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      for (const statement of statements) {
-        await client.query(statement);
-      }
-
-      // Seed base currencies
-      await client.query(`
-        INSERT INTO currencies (code, decimals, symbol, name)
-        VALUES ('CLP', 0, '$', 'Peso chileno'), ('USD', 2, '$', 'Dólar estadounidense')
-        ON CONFLICT (code) DO NOTHING;
-      `);
-
-      // Seed User A and User B
-      await client.query(`
-        INSERT INTO users (id, email, password_hash, display_name, primary_currency_code, locale, timezone, theme, consent_version, consent_accepted_at)
-        VALUES
-          ('${userAId}', 'usera@example.com', 'hash_a', 'User A', 'CLP', 'es-CL', 'America/Santiago', 'system', 'v1.0', now()),
-          ('${userBId}', 'userb@example.com', 'hash_b', 'User B', 'USD', 'en-US', 'America/New_York', 'dark', 'v1.0', now());
-      `);
+      // Seed test users
+      await db.insert(users).values([
+        {
+          id: userAId,
+          email: 'usera-test@example.com',
+          passwordHash: 'hash_a',
+          displayName: 'User A',
+          primaryCurrencyCode: 'CLP',
+          locale: 'es-CL',
+          timezone: 'America/Santiago',
+          theme: 'system',
+          consentVersion: 'v1.0',
+          consentAcceptedAt: new Date(),
+        },
+        {
+          id: userBId,
+          email: 'userb-test@example.com',
+          passwordHash: 'hash_b',
+          displayName: 'User B',
+          primaryCurrencyCode: 'USD',
+          locale: 'en-US',
+          timezone: 'America/New_York',
+          theme: 'dark',
+          consentVersion: 'v1.0',
+          consentAcceptedAt: new Date(),
+        },
+      ]);
     });
 
     afterAll(async () => {
-      if (client) {
-        try {
-          await client.query(`DROP SCHEMA IF EXISTS ${testSchemaName} CASCADE`);
-        } finally {
-          await client.end();
-        }
-      }
+      await db.delete(users).where(inArray(users.id, [userAId, userBId]));
     });
 
     it('usersRepo(userA) can find and update userA, but cannot query or update userB', async () => {
@@ -116,13 +107,13 @@ describe('Repository Layer User Scoping & Type Safety (AD-11 / F0-05)', () => {
       const userA = await repoA.findById();
       expect(userA).not.toBeNull();
       expect(userA?.id).toBe(userAId);
-      expect(userA?.email).toBe('usera@example.com');
+      expect(userA?.email).toBe('usera-test@example.com');
 
       const updatedA = await repoA.update({ displayName: 'User A Updated' });
       expect(updatedA?.displayName).toBe('User A Updated');
 
       // Attempting to query non-existent ID via another repo instance
-      const nonExistentRepo = usersRepo('018d0000-0000-7000-8000-999999999999');
+      const nonExistentRepo = usersRepo('018d0000-0000-7000-8000-000000000999');
       const nonExistent = await nonExistentRepo.findById();
       expect(nonExistent).toBeNull();
     });
@@ -131,20 +122,22 @@ describe('Repository Layer User Scoping & Type Safety (AD-11 / F0-05)', () => {
       const repoA = sessionsRepo(userAId);
       const repoB = sessionsRepo(userBId);
 
+      const THIRTY_DAYS_MS = 2592000000;
+
       // Create sessions for User A
       const sA1 = await repoA.create({
         id: sessionA1Id,
         tokenHash: tokenHashA1,
         userAgent: 'Browser A1',
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + THIRTY_DAYS_MS),
       });
       expect(sA1.userId).toBe(userAId);
 
       const sA2 = await repoA.create({
         id: sessionA2Id,
-        tokenHash: 'token_hash_a2_valid',
+        tokenHash: 'token_hash_a2_valid_64_characters_long_sha256_mocked_value_aaaa2222',
         userAgent: 'Browser A2',
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + THIRTY_DAYS_MS),
       });
       expect(sA2.userId).toBe(userAId);
 
@@ -153,7 +146,7 @@ describe('Repository Layer User Scoping & Type Safety (AD-11 / F0-05)', () => {
         id: sessionB1Id,
         tokenHash: tokenHashB1,
         userAgent: 'Browser B1',
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + THIRTY_DAYS_MS),
       });
       expect(sB1.userId).toBe(userBId);
 
