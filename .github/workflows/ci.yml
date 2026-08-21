@@ -43,8 +43,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://postgres:invalidpassword@localhost:5432/money_test
-      DATABASE_URL_UNPOOLED: postgres://postgres:invalidpassword@localhost:5432/money_test
+      DATABASE_URL: postgres://postgres:postgrespassword@localhost:5432/money_test
+      DATABASE_URL_UNPOOLED: postgres://postgres:postgrespassword@localhost:5432/money_test
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -70,7 +70,13 @@ jobs:
       - name: Boundary Lint Fixtures Regression Check
         run: npm run test:lint-fixtures
 
-      - name: Unit Tests & Domain Coverage (>= 80%)
+      - name: Apply Database Migrations
+        run: npm run db:migrate
+
+      - name: Seed Initial Catalog Data
+        run: npm run db:seed
+
+      - name: Unit & Integration Tests (PostgreSQL 15 & Domain Coverage >= 80%)
         run: npm run test:coverage
 
       - name: Build Application
