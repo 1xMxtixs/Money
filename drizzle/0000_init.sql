@@ -14,7 +14,8 @@ CREATE TABLE "invitations" (
 	"redeemed_by" uuid,
 	"redeemed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "invitations_invited_email_len_check" CHECK (char_length("invitations"."invited_email") <= 254)
+	CONSTRAINT "invitations_invited_email_len_check" CHECK (char_length("invitations"."invited_email") <= 254),
+	CONSTRAINT "invitations_redeemed_check" CHECK ("redeemed_by" IS NULL OR "redeemed_at" IS NOT NULL)
 );
 --> statement-breakpoint
 CREATE TABLE "password_reset_tokens" (
@@ -61,13 +62,13 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_theme_check" CHECK ("users"."theme" IN ('light','dark','system'))
 );
 --> statement-breakpoint
-ALTER TABLE "invitations" ADD CONSTRAINT "invitations_redeemed_by_users_id_fk" FOREIGN KEY ("redeemed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_redeemed_by_users_id_fk" FOREIGN KEY ("redeemed_by") REFERENCES "users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_primary_currency_code_currencies_code_fk" FOREIGN KEY ("primary_currency_code") REFERENCES "public"."currencies"("code") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "users" ADD CONSTRAINT "users_primary_currency_code_currencies_code_fk" FOREIGN KEY ("primary_currency_code") REFERENCES "currencies"("code") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
 CREATE UNIQUE INDEX "uq_invitations_code" ON "invitations" USING btree ("code_hash");
 --> statement-breakpoint

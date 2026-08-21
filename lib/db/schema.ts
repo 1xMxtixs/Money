@@ -93,6 +93,7 @@ export const invitations = pgTable(
   },
   (table) => [
     check('invitations_invited_email_len_check', sql`char_length(${table.invitedEmail}) <= 254`),
+    check('invitations_redeemed_check', sql`${table.redeemedBy} IS NULL OR ${table.redeemedAt} IS NOT NULL`),
     uniqueIndex('uq_invitations_code').on(table.codeHash),
   ]
 );

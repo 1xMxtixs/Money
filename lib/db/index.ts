@@ -1,6 +1,8 @@
 import { drizzle as drizzleHttp } from 'drizzle-orm/neon-http';
 import { drizzle as drizzleWs } from 'drizzle-orm/neon-serverless';
-import { neon, Pool, neonConfig } from '@neondatabase/serverless';
+import { drizzle as drizzleNodePg } from 'drizzle-orm/node-postgres';
+import { neon, Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
+import { Pool as PgPool } from 'pg';
 import ws from 'ws';
 import * as schema from './schema';
 
@@ -21,32 +23,50 @@ function getUnpooledDatabaseUrl(): string {
   return process.env.DATABASE_URL_UNPOOLED || getDatabaseUrl();
 }
 
+function isNeonUrl(url: string): boolean {
+  return url.includes('neon.tech');
+}
+
 let httpInstance: ReturnType<typeof drizzleHttp<typeof schema>> | null = null;
 let wsInstance: ReturnType<typeof drizzleWs<typeof schema>> | null = null;
-let poolInstance: Pool | null = null;
+let nodePgInstance: ReturnType<typeof drizzleNodePg<typeof schema>> | null = null;
 
 /**
- * Returns the Neon HTTP Drizzle client.
+ * Returns the Neon HTTP Drizzle client (or node-postgres in local/CI standard PostgreSQL environments).
  * Optimized for single-statement reads and writes in serverless execution (AD-04, doc 3 §6).
  */
 export function getDb() {
-  if (!httpInstance) {
-    const sql = neon(getDatabaseUrl());
-    httpInstance = drizzleHttp({ client: sql, schema });
+  const url = getDatabaseUrl();
+  if (isNeonUrl(url)) {
+    if (!httpInstance) {
+      const sql = neon(url);
+      httpInstance = drizzleHttp({ client: sql, schema });
+    }
+    return httpInstance;
   }
-  return httpInstance;
+
+  if (!nodePgInstance) {
+    const pool = new PgPool({ connectionString: url });
+    nodePgInstance = drizzleNodePg({ client: pool, schema });
+  }
+  return nodePgInstance;
 }
 
 /**
- * Returns the Neon WebSocket Pool Drizzle client.
+ * Returns the Neon WebSocket Pool Drizzle client (or node-postgres in local/CI standard PostgreSQL environments).
  * Dedicated for interactive multi-statement transactions (e.g. transfer pair atomicity, doc 3 §6).
  */
 export function getPoolDb() {
-  if (!wsInstance) {
-    poolInstance = new Pool({ connectionString: getUnpooledDatabaseUrl() });
-    wsInstance = drizzleWs({ client: poolInstance, schema });
+  const unpooledUrl = getUnpooledDatabaseUrl();
+  if (isNeonUrl(unpooledUrl)) {
+    if (!wsInstance) {
+      const pool = new NeonPool({ connectionString: unpooledUrl });
+      wsInstance = drizzleWs({ client: pool, schema });
+    }
+    return wsInstance;
   }
-  return wsInstance;
+
+  return getDb();
 }
 
 // Proxied exports for direct convenience with safe lazy initialization
