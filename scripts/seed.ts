@@ -12,7 +12,7 @@ export const DEFAULT_CURRENCIES = [
   },
   {
     code: 'USD',
-    decimals: 2,
+    decimals: 3,
     symbol: '$',
     name: 'Dólar estadounidense',
   },
