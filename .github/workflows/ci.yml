@@ -70,11 +70,8 @@ jobs:
       - name: Boundary Lint Fixtures Regression Check
         run: npm run test:lint-fixtures
 
-      - name: Apply Database Migrations
-        run: npm run db:migrate
-
-      - name: Seed Initial Catalog Data
-        run: npm run db:seed
+      - name: Verify Clean Setup Pipeline (npm run setup)
+        run: npm run setup
 
       - name: Unit & Integration Tests (PostgreSQL 15 & Domain Coverage >= 80%)
         run: npm run test:coverage
