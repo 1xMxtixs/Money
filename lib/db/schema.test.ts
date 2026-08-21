@@ -229,19 +229,10 @@ describe('Database Schema & Initial Migration (F0-04)', () => {
     expect(invCheck.rows[0].redeemed_at).not.toBeNull();
   });
 
-  it('verifies seed data for CLP (0 decimals) and USD (2 decimals)', async () => {
-    await client.query(`
-      INSERT INTO currencies (code, decimals, symbol, name)
-      VALUES
-        ('CLP', 0, '$', 'Peso chileno'),
-        ('USD', 2, '$', 'Dólar estadounidense')
-      ON CONFLICT (code) DO UPDATE
-      SET decimals = EXCLUDED.decimals, symbol = EXCLUDED.symbol, name = EXCLUDED.name;
-    `);
-
+  it('verifies seed data for CLP (0 decimals) and USD (2 decimals) in public catalog', async () => {
     const res = await client.query(`
       SELECT code, decimals, symbol, name
-      FROM currencies
+      FROM public.currencies
       WHERE code IN ('CLP', 'USD')
       ORDER BY code;
     `);
