@@ -41,6 +41,8 @@ export const uuidSchema = boundedString(36, 36).regex(
 
 export const currencyCodeSchema = z.enum(['CLP', 'USD']);
 
+export const localeSchema = z.enum(['es-CL', 'en-US']);
+
 export const moneyAmountSchema = strictObject({
   minor: z
     .number()
