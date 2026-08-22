@@ -89,9 +89,7 @@ const localMoneyPlugin = {
           normalizedPath.includes('/scripts/') ||
           normalizedPath.includes('scripts/') ||
           normalizedPath.includes('/tests/') ||
-          normalizedPath.includes('tests/') ||
-          normalizedPath.includes('.test.') ||
-          normalizedPath.includes('.spec.')
+          normalizedPath.includes('tests/')
         ) {
           return {};
         }
