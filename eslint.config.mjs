@@ -31,6 +31,36 @@ const RECHARTS_PATTERNS = [
   },
 ];
 
+const DB_RESTRICTED_PATHS = [
+  {
+    name: '@/lib/db',
+    message:
+      'lib/db must not be imported outside lib/repos/** (AD-11 / AGENTS.md §E). Always use lib/repos.',
+  },
+];
+
+const DB_RESTRICTED_PATTERNS = [
+  {
+    group: [
+      '@/lib/db',
+      '@/lib/db/*',
+      '@/lib/db/**',
+      '../lib/db',
+      '../lib/db/**',
+      '../../lib/db/**',
+      '**/lib/db',
+      '**/lib/db/**',
+      './db',
+      './db/**',
+      '../db',
+      '../db/**',
+      '../../db/**',
+    ],
+    message:
+      'lib/db must not be imported outside lib/repos/** (AD-11 / AGENTS.md §E). Always use lib/repos.',
+  },
+];
+
 const localMoneyPlugin = {
   rules: {
     'no-amount-arithmetic': {
@@ -231,12 +261,25 @@ export default tseslint.config(
               message:
                 'lib/domain/** must not import from lib/db/** (Rule 1 / doc 3 §12 / AGENTS.md §E).',
             },
-            // Rule 2: app must not import lib/db directly
+            // AD-11 / Rule 2: lib/db must not be imported anywhere outside lib/repos/**
             {
-              target: './app',
+              target: [
+                './app',
+                './components',
+                './features',
+                './lib/domain',
+                './lib/format',
+                './lib/i18n',
+                './lib/schemas',
+                './lib/stores',
+                './lib/auth',
+                './lib/api',
+                './lib/observability',
+                './tests',
+              ],
               from: './lib/db',
               message:
-                'app/** must not import lib/db directly. Always use lib/repos (Rule 2 / AD-11 / AGENTS.md §E).',
+                'lib/db must not be imported outside lib/repos/** (AD-11 / AGENTS.md §E). Always use lib/repos.',
             },
             // Rule 3: components must not import features
             {
@@ -258,6 +301,30 @@ export default tseslint.config(
     },
   },
 
+  // AD-11 / Rule 2: Prohibit importing lib/db anywhere outside lib/repos/**, lib/db/**, scripts/**, and config
+  {
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    ignores: [
+      '**/lib/repos/**',
+      'lib/repos/**',
+      '**/lib/db/**',
+      'lib/db/**',
+      '**/scripts/**',
+      'scripts/**',
+      '*.config.{js,mjs,cjs,ts}',
+      'drizzle.config.{js,mjs,cjs,ts}',
+    ],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [...RECHARTS_PATHS, ...DB_RESTRICTED_PATHS],
+          patterns: [...RECHARTS_PATTERNS, ...DB_RESTRICTED_PATTERNS],
+        },
+      ],
+    },
+  },
+
   // Rule 1 specific restrictions on lib/domain/**
   {
     files: [
@@ -270,19 +337,16 @@ export default tseslint.config(
         {
           paths: [
             ...RECHARTS_PATHS,
+            ...DB_RESTRICTED_PATHS,
             {
               name: 'next',
               message:
                 'lib/domain/** must not import next (Rule 1 / doc 3 §12 / AGENTS.md §E).',
             },
-            {
-              name: '@/lib/db',
-              message:
-                'lib/domain/** must not import from lib/db (Rule 1 / doc 3 §12 / AGENTS.md §E).',
-            },
           ],
           patterns: [
             ...RECHARTS_PATTERNS,
+            ...DB_RESTRICTED_PATTERNS,
             {
               group: [
                 'next/*',
@@ -292,50 +356,9 @@ export default tseslint.config(
                 '../app/**',
                 '../../app/**',
                 '**/app/**',
-                '@/lib/db/*',
-                '@/lib/db/**',
-                '../db',
-                '../db/**',
-                '../../db/**',
-                '**/lib/db/**',
               ],
               message:
-                'lib/domain/** must not import next/*, app/*, or lib/db/* (Rule 1 / doc 3 §12 / AGENTS.md §E).',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
-  // Rule 2 specific restrictions on app/**
-  {
-    files: ['**/app/**/*.{js,mjs,cjs,ts,tsx}', 'app/**/*.{js,mjs,cjs,ts,tsx}'],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            ...RECHARTS_PATHS,
-            {
-              name: '@/lib/db',
-              message:
-                'app/** must not import lib/db directly. Always use lib/repos (Rule 2 / AD-11 / AGENTS.md §E).',
-            },
-          ],
-          patterns: [
-            ...RECHARTS_PATTERNS,
-            {
-              group: [
-                '@/lib/db/*',
-                '@/lib/db/**',
-                '../lib/db',
-                '../lib/db/**',
-                '../../lib/db/**',
-                '**/lib/db/**',
-              ],
-              message:
-                'app/** must not import lib/db directly. Always use lib/repos (Rule 2 / AD-11 / AGENTS.md §E).',
+                'lib/domain/** must not import next/* or app/* (Rule 1 / doc 3 §12 / AGENTS.md §E).',
             },
           ],
         },
@@ -355,6 +378,7 @@ export default tseslint.config(
         {
           paths: [
             ...RECHARTS_PATHS,
+            ...DB_RESTRICTED_PATHS,
             {
               name: '@/features',
               message:
@@ -363,6 +387,7 @@ export default tseslint.config(
           ],
           patterns: [
             ...RECHARTS_PATTERNS,
+            ...DB_RESTRICTED_PATTERNS,
             {
               group: [
                 '@/features/*',
@@ -390,9 +415,13 @@ export default tseslint.config(
       '@typescript-eslint/no-restricted-imports': [
         'error',
         {
-          paths: feat === 'stats' ? [] : RECHARTS_PATHS,
+          paths: [
+            ...(feat === 'stats' ? [] : RECHARTS_PATHS),
+            ...DB_RESTRICTED_PATHS,
+          ],
           patterns: [
             ...(feat === 'stats' ? [] : RECHARTS_PATTERNS),
+            ...DB_RESTRICTED_PATTERNS,
             {
               group: ALL_FEATURES.filter((f) => f !== feat).flatMap((f) => [
                 `@/features/${f}`,
