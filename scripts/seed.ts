@@ -2,21 +2,9 @@ import { loadEnvConfig } from '@next/env';
 loadEnvConfig(process.cwd());
 
 import { getPoolDb, schema } from '../lib/db';
+import { SUPPORTED_CURRENCIES } from '../lib/domain/money/currencies';
 
-export const DEFAULT_CURRENCIES = [
-  {
-    code: 'CLP',
-    decimals: 0,
-    symbol: '$',
-    name: 'Peso chileno',
-  },
-  {
-    code: 'USD',
-    decimals: 2,
-    symbol: '$',
-    name: 'Dólar estadounidense',
-  },
-] as const;
+export const DEFAULT_CURRENCIES = SUPPORTED_CURRENCIES;
 
 export async function seed() {
   const db = getPoolDb();

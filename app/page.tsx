@@ -1,15 +1,19 @@
-import { Button } from "@/components/ui/button";
+import { headers } from 'next/headers';
+import { Button } from '@/components/ui/button';
+import { getServerTranslations } from '@/lib/i18n/server';
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { t } = getServerTranslations(await headers());
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
       <div className="max-w-md space-y-4">
-        <h1 className="text-4xl font-bold tracking-tight">Money</h1>
+        <h1 className="text-4xl font-bold tracking-tight">{t('common.appName')}</h1>
         <p className="text-muted-foreground">
-          Finanzas personales privadas, claras y en calma.
+          {t('common.tagline')}
         </p>
         <div className="pt-4">
-          <Button>Comenzar</Button>
+          <Button>{t('auth.login')}</Button>
         </div>
       </div>
     </main>
