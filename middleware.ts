@@ -5,6 +5,8 @@ import { forbiddenOrigin, problemResponse } from '@/lib/api/problem';
 
 export function middleware(req: NextRequest) {
   const isApi = req.nextUrl.pathname.startsWith('/api');
+  const nonce = generateNonce();
+  const securityHeaders = getSecurityHeaders({ nonce, isApi });
 
   // Anti-CSRF Origin verification on mutations (doc 7 §8 / SP-05 / T5)
   const originCheck = verifyMutationOrigin({
@@ -22,12 +24,12 @@ export function middleware(req: NextRequest) {
         status: err.status,
         code: err.code,
       },
-      err.headers
+      {
+        ...err.headers,
+        ...securityHeaders,
+      }
     );
   }
-
-  const nonce = generateNonce();
-  const securityHeaders = getSecurityHeaders({ nonce, isApi });
 
   // Propagate nonce and CSP to Next.js internals via request headers (T2)
   const requestHeaders = new Headers(req.headers);

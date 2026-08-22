@@ -108,6 +108,9 @@ export function verifyMutationOrigin(
   }
 
   const originHeader = req.headers.get('origin');
+  // NOTA (F0-17): El origen canónico se deduce actualmente de req.url (new URL(req.url).origin).
+  // En F0-17 (dominio de producción) se validará contra una variable de entorno
+  // configurada para el origen canónico y evitar inyección de Host a través de un proxy mal configurado.
   const canonicalOrigin = new URL(req.url).origin;
 
   // Branch 1 & 2: Origin header present

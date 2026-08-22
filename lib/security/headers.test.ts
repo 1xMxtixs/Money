@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { NextRequest } from 'next/server';
+import { middleware } from '@/middleware';
 import {
   getSecurityHeaders,
   buildCspHeader,
@@ -178,6 +180,49 @@ describe('Security Headers Suite (F0-07 / doc 7 §2, §7, §8)', () => {
       expect(response.status).toBe(403);
       expect(response.headers.get('Content-Type')).toBe('application/problem+json; charset=utf-8');
       expect(response.headers.get('Cache-Control')).toBe('no-store');
+
+      const body = await response.json();
+      expect(body).toEqual({
+        type: 'https://money.app/errors/forbidden-origin',
+        title: 'Request origin is not allowed',
+        status: 403,
+        code: 'FORBIDDEN_ORIGIN',
+      });
+    });
+
+    it('returns 403 with all 9 security headers and Cache-Control when mutation origin verification fails in middleware', async () => {
+      const req = new NextRequest('https://money.app/api/transactions', {
+        method: 'POST',
+        headers: {
+          origin: 'https://evil.com',
+        },
+      });
+
+      const response = middleware(req);
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Content-Type')).toBe('application/problem+json; charset=utf-8');
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+
+      // Verify all 9 security headers are present on the 403 rejection response
+      expect(response.headers.get('Strict-Transport-Security')).toBe('max-age=63072000; includeSubDomains');
+      expect(response.headers.get('Strict-Transport-Security')).not.toContain('preload');
+      expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+      expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+      expect(response.headers.get('Permissions-Policy')).toBe(
+        'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()'
+      );
+      expect(response.headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
+      expect(response.headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin');
+      expect(response.headers.get('X-XSS-Protection')).toBe('0');
+
+      // Verify Content-Security-Policy contains nonce and strict-dynamic
+      const csp = response.headers.get('Content-Security-Policy');
+      expect(csp).toBeDefined();
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain('strict-dynamic');
+      expect(csp).toMatch(/script-src 'self' 'nonce-[A-Za-z0-9+/=]{24}' 'strict-dynamic'/);
 
       const body = await response.json();
       expect(body).toEqual({
