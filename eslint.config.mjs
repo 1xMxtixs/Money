@@ -182,22 +182,76 @@ const localMoneyPlugin = {
           return {};
         }
 
+        const namedObjectImports = new Set();
+        const zodNamespaceImports = new Set(['z', 'zod']);
+
         return {
+          ImportDeclaration(node) {
+            if (node.source && node.source.value === 'zod') {
+              for (const specifier of node.specifiers) {
+                if (specifier.type === 'ImportSpecifier') {
+                  if (specifier.imported && specifier.imported.name === 'object') {
+                    namedObjectImports.add(specifier.local.name);
+                  } else if (specifier.imported && specifier.imported.name === 'z') {
+                    zodNamespaceImports.add(specifier.local.name);
+                  }
+                } else if (
+                  specifier.type === 'ImportNamespaceSpecifier' ||
+                  specifier.type === 'ImportDefaultSpecifier'
+                ) {
+                  zodNamespaceImports.add(specifier.local.name);
+                }
+              }
+            }
+          },
+
           CallExpression(node) {
+            // Case 1: Direct identifier call (e.g. object({ ... }) or custom alias import { object as obj })
             if (
               node.callee &&
-              node.callee.type === 'MemberExpression' &&
-              node.callee.property &&
-              node.callee.property.type === 'Identifier' &&
-              node.callee.property.name === 'object' &&
-              node.callee.object &&
-              node.callee.object.type === 'Identifier' &&
-              /^(z|zod)$/i.test(node.callee.object.name)
+              node.callee.type === 'Identifier' &&
+              namedObjectImports.has(node.callee.name)
             ) {
               context.report({
                 node,
                 messageId: 'noRawZodObject',
               });
+              return;
+            }
+
+            // Case 2 & 3: MemberExpression (e.g. z.object(...), z['object'](...), zz.object(...), validator.object(...))
+            if (
+              node.callee &&
+              node.callee.type === 'MemberExpression' &&
+              node.callee.object &&
+              node.callee.object.type === 'Identifier' &&
+              zodNamespaceImports.has(node.callee.object.name)
+            ) {
+              const isNonComputedObject =
+                !node.callee.computed &&
+                node.callee.property &&
+                node.callee.property.type === 'Identifier' &&
+                node.callee.property.name === 'object';
+
+              const isLiteralComputedObject =
+                node.callee.computed &&
+                node.callee.property &&
+                node.callee.property.type === 'Literal' &&
+                node.callee.property.value === 'object';
+
+              const isTemplateComputedObject =
+                node.callee.computed &&
+                node.callee.property &&
+                node.callee.property.type === 'TemplateLiteral' &&
+                node.callee.property.quasis.length === 1 &&
+                node.callee.property.quasis[0].value.raw === 'object';
+
+              if (isNonComputedObject || isLiteralComputedObject || isTemplateComputedObject) {
+                context.report({
+                  node,
+                  messageId: 'noRawZodObject',
+                });
+              }
             }
           },
         };
