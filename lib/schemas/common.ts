@@ -61,15 +61,70 @@ export const isoDateTimeSchema = boundedString(64, 1).datetime({
 export const paginationCursorSchema = boundedString(500, 1).optional();
 
 /**
- * Inspects whether a given Zod schema enforces strict object validation.
+ * Recursively inspects whether a given Zod schema enforces strict object validation
+ * across its entire shape hierarchy (Hueco 1 / T2 / RNF-SE-04).
  */
 export function isStrictSchema(schema: z.ZodTypeAny): boolean {
+  if (!schema || typeof schema !== 'object') {
+    return true;
+  }
+
+  // ZodEffects (.refine, .transform)
   if (schema instanceof z.ZodEffects) {
     return isStrictSchema(schema.innerType());
   }
 
+  // ZodOptional / ZodNullable / ZodDefault / ZodCatch / ZodReadonly
+  if (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault ||
+    schema instanceof z.ZodCatch ||
+    schema instanceof z.ZodReadonly
+  ) {
+    return isStrictSchema(schema._def.innerType);
+  }
+
+  // ZodArray
+  if (schema instanceof z.ZodArray) {
+    return isStrictSchema(schema.element);
+  }
+
+  // ZodRecord
+  if (schema instanceof z.ZodRecord) {
+    return isStrictSchema(schema.valueSchema);
+  }
+
+  // ZodUnion / ZodDiscriminatedUnion
+  if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
+    return (schema.options as z.ZodTypeAny[]).every((opt: z.ZodTypeAny) =>
+      isStrictSchema(opt)
+    );
+  }
+
+  // ZodPipeline
+  if (schema instanceof z.ZodPipeline) {
+    return isStrictSchema(schema._def.in) && isStrictSchema(schema._def.out);
+  }
+
+  // ZodObject: MUST have unknownKeys === 'strict' AND all properties in shape must be strict
   if (schema instanceof z.ZodObject) {
-    return schema._def.unknownKeys === 'strict';
+    if (schema._def.unknownKeys !== 'strict') {
+      return false;
+    }
+
+    const shape =
+      typeof schema._def.shape === 'function'
+        ? schema._def.shape()
+        : schema.shape;
+
+    for (const key of Object.keys(shape)) {
+      if (!isStrictSchema(shape[key])) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   return true;

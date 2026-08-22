@@ -14,7 +14,7 @@ import {
 } from './common';
 
 describe('Shared Zod Schemas & Strict Construction (doc 7 §6 / T2)', () => {
-  it('strictObject rejects unknown keys by construction (Criterion 3 / T2)', () => {
+  it('strictObject rejects unknown keys on flat objects (Criterion 3 / T2)', () => {
     const testSchema = strictObject({
       name: boundedString(50, 1),
       age: z.number().int().positive(),
@@ -37,7 +37,57 @@ describe('Shared Zod Schemas & Strict Construction (doc 7 §6 / T2)', () => {
     }
   });
 
-  it('audits that all exported object schemas in lib/schemas/common are strict (T2)', () => {
+  it('rejects unknown keys in nested objects when constructed with strictObject (Hueco 1 Sonda)', () => {
+    const nestedSchema = strictObject({
+      outer: z.string(),
+      inner: strictObject({
+        a: z.string(),
+      }),
+    });
+
+    // Valid nested payload
+    const validResult = nestedSchema.safeParse({
+      outer: 'valid_outer',
+      inner: { a: 'valid_inner' },
+    });
+    expect(validResult.success).toBe(true);
+
+    // Nested payload with unknown key -> MUST BE REJECTED
+    const invalidResult = nestedSchema.safeParse({
+      outer: 'x',
+      inner: { a: 'y', intruso: 'PASA' },
+    });
+
+    expect(invalidResult.success).toBe(false);
+    if (!invalidResult.success) {
+      expect(invalidResult.error.issues.some((issue) => issue.code === 'unrecognized_keys')).toBe(true);
+      expect(invalidResult.error.issues.some((issue) => issue.path.join('.') === 'inner')).toBe(true);
+    }
+  });
+
+  it('isStrictSchema returns false for schemas with loose nested objects (Hueco 1 Regression)', () => {
+    const looseNestedSchema = strictObject({
+      outer: z.string(),
+      // eslint-disable-next-line money/no-raw-zod-object
+      inner: z.object({
+        a: z.string(),
+      }),
+    });
+
+    // Outer is strictObject, but inner is loose z.object: isStrictSchema must return false!
+    expect(isStrictSchema(looseNestedSchema)).toBe(false);
+
+    // When inner is strictObject, isStrictSchema returns true
+    const fullyStrictSchema = strictObject({
+      outer: z.string(),
+      inner: strictObject({
+        a: z.string(),
+      }),
+    });
+    expect(isStrictSchema(fullyStrictSchema)).toBe(true);
+  });
+
+  it('audits that all exported object schemas in lib/schemas/common are strictly recursive (T2)', () => {
     let objectSchemaCount = 0;
     for (const [exportName, exportedItem] of Object.entries(commonExports)) {
       if (exportedItem instanceof z.ZodObject || exportedItem instanceof z.ZodType) {
@@ -45,7 +95,7 @@ describe('Shared Zod Schemas & Strict Construction (doc 7 §6 / T2)', () => {
           objectSchemaCount++;
           expect(
             isStrictSchema(exportedItem),
-            `Exported schema "${exportName}" must enforce .strict() by construction (T2 / RNF-SE-04)`
+            `Exported schema "${exportName}" must enforce .strict() across all nested shapes (T2 / RNF-SE-04)`
           ).toBe(true);
         }
       }
@@ -54,7 +104,7 @@ describe('Shared Zod Schemas & Strict Construction (doc 7 §6 / T2)', () => {
   });
 
   it('fails audit when an object schema is not strict (T2 regression test)', () => {
-    // A non-strict object schema fails the strictness check
+    // eslint-disable-next-line money/no-raw-zod-object
     const looseSchema = z.object({
       id: z.string(),
     });
