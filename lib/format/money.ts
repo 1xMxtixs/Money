@@ -68,5 +68,6 @@ export function formatMoney(
     useGrouping: opts.useGrouping ?? true,
   });
 
-  return formatter.format(majorAmount);
+  return formatter.format(majorAmount as unknown as number);
 }
+

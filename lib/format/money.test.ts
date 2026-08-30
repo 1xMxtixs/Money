@@ -54,5 +54,10 @@ describe('Format Money Helper (F0-08 / doc 5 §12 / doc 3 §4)', () => {
       const negUsd = formatMoney(-1500n, 'USD', 'en-US');
       expect(cleanSpaces(negUsd)).toMatch(/-\$15\.00|\(\$15\.00\)/);
     });
+
+    it('preserves full precision for large bigint amounts in formatMoney', () => {
+      const result = formatMoney(9007199254740993n, 'USD', 'es-CL');
+      expect(cleanSpaces(result)).toMatch(/90\.071\.992\.547\.409,93/);
+    });
   });
 });
