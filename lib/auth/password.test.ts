@@ -76,15 +76,44 @@ describe('Password Security Module (SP-01 / T-05 / RF-002 / doc 7 §2, §3)', ()
       const len128 = 'a'.repeat(PASSWORD_MAX_LENGTH);
       const len129 = 'a'.repeat(PASSWORD_MAX_LENGTH + 1);
 
-      expect(validatePasswordLength(len7).valid).toBe(false);
-      expect(validatePasswordLength(len8).valid).toBe(true);
-      expect(validatePasswordLength(len128).valid).toBe(true);
-      expect(validatePasswordLength(len129).valid).toBe(false);
+      expect(validatePasswordLength(len7)).toEqual({
+        valid: false,
+        code: 'PASSWORD_TOO_SHORT',
+      });
+      expect(validatePasswordLength(len8)).toEqual({ valid: true });
+      expect(validatePasswordLength(len128)).toEqual({ valid: true });
+      expect(validatePasswordLength(len129)).toEqual({
+        valid: false,
+        code: 'PASSWORD_TOO_LONG',
+      });
 
-      await expect(hashPassword(len7)).rejects.toThrow(/at least 8 characters/);
+      await expect(hashPassword(len7)).rejects.toThrow('PASSWORD_TOO_SHORT');
       await expect(hashPassword(len8)).resolves.toBeDefined();
       await expect(hashPassword(len128)).resolves.toBeDefined();
-      await expect(hashPassword(len129)).rejects.toThrow(/not exceed 128 characters/);
+      await expect(hashPassword(len129)).rejects.toThrow('PASSWORD_TOO_LONG');
+    });
+
+    it('counts length in Unicode code points instead of UTF-16 code units (surrogate pairs)', async () => {
+      const emoji4 = '😀'.repeat(4);
+      const emoji8 = '😀'.repeat(8);
+      const emoji128 = '😀'.repeat(128);
+      const emoji129 = '😀'.repeat(129);
+
+      expect(validatePasswordLength(emoji4)).toEqual({
+        valid: false,
+        code: 'PASSWORD_TOO_SHORT',
+      });
+      expect(validatePasswordLength(emoji8)).toEqual({ valid: true });
+      expect(validatePasswordLength(emoji128)).toEqual({ valid: true });
+      expect(validatePasswordLength(emoji129)).toEqual({
+        valid: false,
+        code: 'PASSWORD_TOO_LONG',
+      });
+
+      await expect(hashPassword(emoji4)).rejects.toThrow('PASSWORD_TOO_SHORT');
+      await expect(hashPassword(emoji8)).resolves.toBeDefined();
+      await expect(hashPassword(emoji128)).resolves.toBeDefined();
+      await expect(hashPassword(emoji129)).rejects.toThrow('PASSWORD_TOO_LONG');
     });
   });
 

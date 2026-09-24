@@ -39,24 +39,33 @@ const DECOY_HASH_PROMISE: Promise<string> = (async () => {
   return hash(randomSecret, ARGON2_PARAMS);
 })();
 
+// Suppress unhandled promise rejection at startup; re-thrown on first await
+DECOY_HASH_PROMISE.catch(() => {});
+
+export type PasswordValidationResult =
+  | { valid: true }
+  | { valid: false; code: 'PASSWORD_TOO_SHORT' | 'PASSWORD_TOO_LONG' };
+
 /**
  * Validates password length constraints on the raw input string before Unicode normalization (T-05 / doc 7 §3).
  * Rejecting oversized raw inputs cuts off Denial of Service (DoS) attacks prior to normalization overhead.
+ * Counts Unicode code points so surrogate pairs / multi-byte characters are accurately counted.
  */
-export function validatePasswordLength(plain: string): { valid: boolean; error?: string } {
+export function validatePasswordLength(plain: string): PasswordValidationResult {
   if (typeof plain !== 'string') {
-    return { valid: false, error: 'Password must be a string' };
+    return { valid: false, code: 'PASSWORD_TOO_SHORT' };
   }
-  if (plain.length < PASSWORD_MIN_LENGTH) {
+  const length = [...plain].length;
+  if (length < PASSWORD_MIN_LENGTH) {
     return {
       valid: false,
-      error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`,
+      code: 'PASSWORD_TOO_SHORT',
     };
   }
-  if (plain.length > PASSWORD_MAX_LENGTH) {
+  if (length > PASSWORD_MAX_LENGTH) {
     return {
       valid: false,
-      error: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters`,
+      code: 'PASSWORD_TOO_LONG',
     };
   }
   return { valid: true };
@@ -90,7 +99,7 @@ export function isCommonPassword(plain: string): boolean {
 export async function hashPassword(plain: string): Promise<string> {
   const validation = validatePasswordLength(plain);
   if (!validation.valid) {
-    throw new Error(validation.error);
+    throw new Error(validation.code);
   }
 
   const normalized = plain.normalize('NFKC');
