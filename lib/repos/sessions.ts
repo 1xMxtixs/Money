@@ -1,8 +1,12 @@
-import { eq, and, isNull, gt, ne } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { eq, and, isNull, gt, lt, ne, sql, type SQL } from 'drizzle-orm';
+import { db, poolDb } from '@/lib/db';
 import { sessions, type Session, type NewSession } from '@/lib/db/schema';
 
-export type CreateSessionInput = Omit<NewSession, 'userId'>;
+export type { Session };
+
+export type CreateSessionInput = Omit<NewSession, 'userId' | 'expiresAt'> & {
+  expiresAt?: Date | SQL;
+};
 
 /**
  * Scoped repository for session management (AD-11 / doc 3 §AD-11).
@@ -18,6 +22,7 @@ export function sessionsRepo(userId: string) {
   return {
     /**
      * Lists active (non-revoked, non-expired) sessions for the bound user.
+     * Uses database clock sql`now()` for expiration evaluation (Criterion 4 / doc 7 §4).
      */
     async listActive(): Promise<Session[]> {
       return db
@@ -27,7 +32,7 @@ export function sessionsRepo(userId: string) {
           and(
             eq(sessions.userId, userId),
             isNull(sessions.revokedAt),
-            gt(sessions.expiresAt, new Date())
+            gt(sessions.expiresAt, sql`now()`)
           )
         );
     },
@@ -50,6 +55,7 @@ export function sessionsRepo(userId: string) {
         .insert(sessions)
         .values({
           ...data,
+          expiresAt: data.expiresAt ?? sql`now() + interval '30 days'`,
           userId,
         })
         .returning();
@@ -64,7 +70,7 @@ export function sessionsRepo(userId: string) {
     async revoke(sessionId: string): Promise<boolean> {
       const result = await db
         .update(sessions)
-        .set({ revokedAt: new Date() })
+        .set({ revokedAt: sql`now()` })
         .where(
           and(
             eq(sessions.id, sessionId),
@@ -83,7 +89,7 @@ export function sessionsRepo(userId: string) {
     async revokeAll(): Promise<number> {
       const result = await db
         .update(sessions)
-        .set({ revokedAt: new Date() })
+        .set({ revokedAt: sql`now()` })
         .where(
           and(
             eq(sessions.userId, userId),
@@ -102,7 +108,7 @@ export function sessionsRepo(userId: string) {
     async revokeAllExcept(currentSessionId: string): Promise<number> {
       const result = await db
         .update(sessions)
-        .set({ revokedAt: new Date() })
+        .set({ revokedAt: sql`now()` })
         .where(
           and(
             eq(sessions.userId, userId),
@@ -113,6 +119,77 @@ export function sessionsRepo(userId: string) {
         .returning({ id: sessions.id });
 
       return result.length;
+    },
+
+    /**
+     * Conditionally touches the session with sliding expiry (Criterion 3 / doc 7 §4).
+     * Single UPDATE enforcing the 15-minute throttle rule directly in SQL:
+     * SET last_seen_at = now(), expires_at = now() + interval '30 days'
+     * WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()
+     *   AND last_seen_at < now() - interval '15 minutes'
+     *
+     * Returns the updated Session if touched, or null if within the 15-minute window.
+     */
+    async touch(sessionId: string): Promise<Session | null> {
+      const [updated] = await db
+        .update(sessions)
+        .set({
+          lastSeenAt: sql`now()`,
+          expiresAt: sql`now() + interval '30 days'`,
+        })
+        .where(
+          and(
+            eq(sessions.id, sessionId),
+            eq(sessions.userId, userId),
+            isNull(sessions.revokedAt),
+            gt(sessions.expiresAt, sql`now()`),
+            lt(sessions.lastSeenAt, sql`now() - interval '15 minutes'`)
+          )
+        )
+        .returning();
+
+      return updated ?? null;
+    },
+
+    /**
+     * Atomically rotates a session: revokes the previous session and inserts the new session
+     * in a single interactive transaction via poolDb (Criterion 5 / doc 7 §4).
+     * Throws if oldSessionId does not exist or is already revoked for this user.
+     */
+    async rotate(
+      oldSessionId: string,
+      data: CreateSessionInput
+    ): Promise<Session> {
+      return poolDb.transaction(async (tx) => {
+        const revoked = await tx
+          .update(sessions)
+          .set({ revokedAt: sql`now()` })
+          .where(
+            and(
+              eq(sessions.id, oldSessionId),
+              eq(sessions.userId, userId),
+              isNull(sessions.revokedAt)
+            )
+          )
+          .returning({ id: sessions.id });
+
+        if (revoked.length === 0) {
+          throw new Error(
+            `Cannot rotate session: session ${oldSessionId} not found or already revoked for user ${userId}.`
+          );
+        }
+
+        const [newSession] = await tx
+          .insert(sessions)
+          .values({
+            ...data,
+            expiresAt: data.expiresAt ?? sql`now() + interval '30 days'`,
+            userId,
+          })
+          .returning();
+
+        return newSession;
+      });
     },
   };
 }
@@ -125,6 +202,8 @@ export function sessionsRepo(userId: string) {
  * BEFORE the user identity is known. Therefore, it cannot be scoped by userId at query time.
  * This function is explicitly isolated and named `unscopedFindSessionByTokenHash` to clearly signal
  * its exception to the standard scoped repository pattern while keeping db imports encapsulated in lib/repos.
+ *
+ * Criterion 4: Uses database clock sql`now()` for expiration evaluation.
  */
 export async function unscopedFindSessionByTokenHash(
   tokenHash: string
@@ -136,7 +215,7 @@ export async function unscopedFindSessionByTokenHash(
       and(
         eq(sessions.tokenHash, tokenHash),
         isNull(sessions.revokedAt),
-        gt(sessions.expiresAt, new Date())
+        gt(sessions.expiresAt, sql`now()`)
       )
     )
     .limit(1);
