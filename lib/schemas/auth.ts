@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { boundedString, localeSchema, strictObject } from './common';
 import { validatePasswordLength } from '@/lib/auth/password';
+import { EMAIL_MAX_LENGTH, INVITATION_CODE_MAX_LENGTH } from './limits';
 
-const emailSchema = boundedString(254, 3)
+const emailSchema = boundedString(EMAIL_MAX_LENGTH, 3)
   .trim()
   .toLowerCase()
   .pipe(z.email());
@@ -22,7 +23,7 @@ const timezoneSchema = boundedString(64, 1).refine((tz) => {
 });
 
 export const registerSchema = strictObject({
-  invitationCode: boundedString(32, 1),
+  invitationCode: boundedString(INVITATION_CODE_MAX_LENGTH, 1),
   email: emailSchema,
   password: passwordSchema,
   timezone: timezoneSchema.optional(),

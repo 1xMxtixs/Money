@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { usersRepo, unscopedFindUserByEmail } from '@/lib/repos';
-import { createInvitation } from '@/lib/auth/invitations';
+import { createInvitation, hashInvitationCode } from '@/lib/auth/invitations';
+import { uuidv7 } from '@/lib/domain/id/uuidv7';
+import { unscopedIsInvitationRedeemable } from '@/lib/repos/invitations';
+import { unscopedRegisterUser } from '@/lib/repos/users';
 import { POST as register } from './register/route';
 import { POST as login } from './login/route';
 import { POST as logout } from './logout/route';
@@ -181,5 +184,54 @@ describe('auth endpoints (integración PostgreSQL)', () => {
     });
     expect(own.status).toBe(204);
     expect((await getSession(authed('GET', 'session', owner))).status).toBe(401);
+  });
+
+  it('GET session, GET sessions y logout-all sin cookie -> 401 UNAUTHENTICATED', async () => {
+    const noCookie = (method: string, path: string) =>
+      new Request(`http://localhost/api/auth/${path}`, { method });
+    for (const res of [
+      await getSession(noCookie('GET', 'session')),
+      await listSessions(noCookie('GET', 'sessions')),
+      await logoutAll(noCookie('POST', 'logout-all')),
+    ]) {
+      expect(res.status).toBe(401);
+      expect((await res.json()).code).toBe('UNAUTHENTICATED');
+    }
+  });
+
+  it('DELETE de la sesión ACTUAL limpia la cookie', async () => {
+    const { cookie } = await signUp('self');
+    const current = (await (await listSessions(authed('GET', 'sessions', cookie))).json()).items[0].id as string;
+    const res = await deleteSession(authed('DELETE', `sessions/${current}`, cookie), {
+      params: Promise.resolve({ id: current }),
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('set-cookie')).toMatch(/^session=; .*Max-Age=0/);
+  });
+
+  it('login con la cookie de OTRO usuario revoca esa sesión y emite una nueva', async () => {
+    const { cookie: aCookie } = await signUp('usera');
+    await signUp('userb');
+    const res = await login(post('login', { email: email('userb'), password: PASSWORD }, aCookie));
+    expect(res.status).toBe(200);
+    expect((await getSession(authed('GET', 'session', aCookie))).status).toBe(401);
+    const me = await getSession(authed('GET', 'session', cookieOf(res)));
+    expect((await me.json()).user.email).toBe(email('userb'));
+  });
+
+  it('el alta crea la sesión en la misma transacción: si falla, no queda usuario ni invitación gastada', async () => {
+    const { code } = await createInvitation();
+    const hash = hashInvitationCode(code);
+    const addr = email('atomic');
+    await expect(
+      unscopedRegisterUser(
+        { id: uuidv7(), email: addr, passwordHash: 'x', consentVersion: 'v', consentAcceptedAt: new Date() },
+        hash,
+        // user_agent > 255 viola el CHECK: el INSERT de la sesión falla tras user + canje.
+        { id: uuidv7(), tokenHash: `h-${tag}`, userAgent: 'x'.repeat(300) }
+      )
+    ).rejects.toThrow();
+    expect(await unscopedFindUserByEmail(addr)).toBeNull();
+    expect(await unscopedIsInvitationRedeemable(hash, addr)).toBe(true);
   });
 });
