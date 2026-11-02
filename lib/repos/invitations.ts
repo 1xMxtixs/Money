@@ -21,6 +21,19 @@ export async function unscopedCreateInvitation(
   return row;
 }
 
+/** Única definición de "canjeable": sin canjear, vigente y con el correo permitido. */
+function redeemablePredicate(codeHash: string, email: string) {
+  return and(
+    eq(invitations.codeHash, codeHash),
+    isNull(invitations.redeemedAt),
+    gt(invitations.expiresAt, sql`now()`),
+    or(
+      isNull(invitations.invitedEmail),
+      sql`lower(${invitations.invitedEmail}) = lower(${email})`
+    )
+  );
+}
+
 /**
  * Canje atómico: un único UPDATE ... WHERE redeemed_at IS NULL AND expires_at > now() RETURNING.
  * Si dos canjes compiten, Postgres serializa la fila y solo uno cumple la condición.
@@ -36,18 +49,21 @@ export async function unscopedRedeemInvitation(
   const [row] = await executor
     .update(invitations)
     .set({ redeemedBy: redeemer.userId, redeemedAt: sql`now()` })
-    .where(
-      and(
-        eq(invitations.codeHash, codeHash),
-        isNull(invitations.redeemedAt),
-        gt(invitations.expiresAt, sql`now()`),
-        or(
-          isNull(invitations.invitedEmail),
-          sql`lower(${invitations.invitedEmail}) = lower(${redeemer.email})`
-        )
-      )
-    )
+    .where(redeemablePredicate(codeHash, redeemer.email))
     .returning();
 
   return row ?? null;
+}
+
+/** Lectura sin efectos: ¿el código podría canjearse ahora con este correo? */
+export async function unscopedIsInvitationRedeemable(
+  codeHash: string,
+  email: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(redeemablePredicate(codeHash, email))
+    .limit(1);
+  return Boolean(row);
 }
