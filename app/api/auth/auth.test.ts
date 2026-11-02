@@ -44,6 +44,8 @@ function cookieOf(res: Response) {
 }
 
 const PASSWORD = 'una contraseña muy larga 123';
+const WRONG = 'otra frase que no coincide';
+const WRONG = 'otra frase que no coincide';
 
 async function signUp(name: string) {
   const { code } = await createInvitation();
@@ -111,8 +113,8 @@ describe('auth endpoints (integración PostgreSQL)', () => {
 
   it('login: contraseña incorrecta y correo inexistente dan exactamente la misma respuesta', async () => {
     await signUp('log');
-    const wrong = await login(post('login', { email: email('log'), password: 'incorrecta-12345' }));
-    const ghost = await login(post('login', { email: email('ghost'), password: 'incorrecta-12345' }));
+    const wrong = await login(post('login', { email: email('log'), password: WRONG }));
+    const ghost = await login(post('login', { email: email('ghost'), password: WRONG }));
     expect(wrong.status).toBe(401);
     expect(ghost.status).toBe(401);
     expect(await wrong.text()).toBe(await ghost.text());
