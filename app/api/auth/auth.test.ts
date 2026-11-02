@@ -45,7 +45,6 @@ function cookieOf(res: Response) {
 
 const PASSWORD = 'una contraseña muy larga 123';
 const WRONG = 'otra frase que no coincide';
-const WRONG = 'otra frase que no coincide';
 
 async function signUp(name: string) {
   const { code } = await createInvitation();
