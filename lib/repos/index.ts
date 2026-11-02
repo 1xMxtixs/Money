@@ -17,6 +17,7 @@ export {
   unscopedCreateInvitation,
   unscopedRedeemInvitation,
   unscopedIsInvitationRedeemable,
+  unscopedDeleteInvitation,
   type Invitation,
   type InvitationExecutor,
 } from './invitations';

@@ -5,8 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n/context';
+import {
+  EMAIL_MAX_LENGTH,
+  INVITATION_CODE_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '@/lib/schemas/limits';
 
 type Mode = 'login' | 'register';
+type Field = 'invitationCode' | 'email' | 'password';
 
 interface Problem {
   status: number;
@@ -22,22 +29,32 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
   const [warning, setWarning] = useState(false);
   const [pending, setPending] = useState(false);
   const isRegister = mode === 'register';
 
-  function messageFor(p: Problem): string {
-    if (p.code === 'INVITATION_INVALID') return t('auth.invitationInvalid');
-    if (p.code === 'EMAIL_TAKEN') return t('auth.emailTaken');
-    if (p.status === 401) return t('auth.invalidCredentials');
-    if (p.status === 429) return t('errors.rateLimited');
+  function fieldMessage(field: Field): string {
+    if (field === 'email') return t('validation.invalidEmail');
+    if (field === 'password') return t('validation.minLength', { min: PASSWORD_MIN_LENGTH });
+    return t('validation.required');
+  }
+
+  function showProblem(p: Problem) {
+    if (p.code === 'INVITATION_INVALID') return setError(t('auth.invitationInvalid'));
+    if (p.code === 'EMAIL_TAKEN') return setError(t('auth.emailTaken'));
+    if (p.status === 401) return setError(t('auth.invalidCredentials'));
+    if (p.status === 429) return setError(t('errors.rateLimited'));
     if (p.status === 422) {
-      const first = p.errors?.[0];
-      if (first?.path === 'email') return t('validation.invalidEmail');
-      if (first?.path === 'password') return t('validation.minLength', { min: 8 });
-      return t('validation.required');
+      const fields: Field[] = ['invitationCode', 'email', 'password'];
+      const found: Partial<Record<Field, string>> = {};
+      for (const e of p.errors ?? []) {
+        const field = fields.find((f) => f === e.path);
+        if (field) found[field] = fieldMessage(field);
+      }
+      if (Object.keys(found).length > 0) return setFieldErrors(found);
     }
-    return t('errors.generic');
+    setError(t('errors.generic'));
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,6 +72,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
     setPending(true);
     setError(null);
+    setFieldErrors({});
     try {
       const res = await fetch(`/api/auth/${mode}`, {
         method: 'POST',
@@ -63,7 +81,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       });
       if (!res.ok) {
         const problem = (await res.json().catch(() => ({}))) as Omit<Problem, 'status'>;
-        setError(messageFor({ ...problem, status: res.status }));
+        showProblem({ ...problem, status: res.status });
         return;
       }
       const payload = (await res.json()) as { warnings?: string[] };
@@ -88,6 +106,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
     );
   }
 
+  const fieldError = (field: Field) =>
+    fieldErrors[field] && (
+      <p id={`${field}-error`} className="text-sm">
+        {fieldErrors[field]}
+      </p>
+    );
+  const a11y = (field: Field) => ({
+    'aria-invalid': fieldErrors[field] ? true : undefined,
+    'aria-describedby': fieldErrors[field] ? `${field}-error` : undefined,
+  });
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {isRegister && (
@@ -99,18 +128,30 @@ export function AuthForm({ mode }: { mode: Mode }) {
             id="invitationCode"
             name="invitationCode"
             required
-            maxLength={32}
+            maxLength={INVITATION_CODE_MAX_LENGTH}
             autoComplete="off"
             placeholder="MNY-XXXX-XXXX"
             className={INPUT}
+            {...a11y('invitationCode')}
           />
+          {fieldError('invitationCode')}
         </div>
       )}
       <div className="space-y-1">
         <label htmlFor="email" className="text-sm font-medium">
           {t('auth.email')}
         </label>
-        <input id="email" name="email" type="email" required maxLength={254} autoComplete="email" className={INPUT} />
+        <input
+          id="email"
+          name="email"
+          type="email"
+          required
+          maxLength={EMAIL_MAX_LENGTH}
+          autoComplete="email"
+          className={INPUT}
+          {...a11y('email')}
+        />
+        {fieldError('email')}
       </div>
       <div className="space-y-1">
         <label htmlFor="password" className="text-sm font-medium">
@@ -121,11 +162,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
           name="password"
           type="password"
           required
-          minLength={isRegister ? 8 : undefined}
-          maxLength={128}
+          minLength={isRegister ? PASSWORD_MIN_LENGTH : undefined}
+          maxLength={PASSWORD_MAX_LENGTH}
           autoComplete={isRegister ? 'new-password' : 'current-password'}
           className={INPUT}
+          {...a11y('password')}
         />
+        {fieldError('password')}
       </div>
       {error && (
         <p role="alert" className="text-sm">
