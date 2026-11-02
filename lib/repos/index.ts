@@ -8,6 +8,7 @@ export {
 } from './users';
 export {
   sessionsRepo,
+  SessionNotRotatableError,
   unscopedFindSessionByTokenHash,
   type CreateSessionInput,
   type Session,

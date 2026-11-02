@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db, poolDb } from '@/lib/db';
-import { users, type User, type NewUser } from '@/lib/db/schema';
+import { sessions, users, type User, type NewUser } from '@/lib/db/schema';
 import {
   unscopedIsInvitationRedeemable,
   unscopedRedeemInvitation,
@@ -91,13 +91,14 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
- * Alta atómica (F0-12): inserta el usuario y canjea la invitación en UNA transacción
- * de `poolDb`. Si el canje no afecta a ninguna fila, la transacción entera se revierte.
+ * Alta atómica (F0-12): inserta el usuario, canjea la invitación y crea la primera sesión
+ * en UNA transacción de `poolDb`: todo se confirma o todo se revierte. Si el canje no afecta a ninguna fila, la transacción entera se revierte.
  * Sin siembra de RF-004 (categorías y cuenta de efectivo): es de F1-05.
  */
 export async function unscopedRegisterUser(
   data: NewUser,
-  codeHash: string
+  codeHash: string,
+  session: { id: string; tokenHash: string; userAgent: string | null }
 ): Promise<RegisterUserResult> {
   try {
     return await poolDb.transaction(async (tx) => {
@@ -108,6 +109,9 @@ export async function unscopedRegisterUser(
         tx
       );
       if (!redeemed) throw new InvitationRejected();
+      await tx
+        .insert(sessions)
+        .values({ ...session, userId: user.id, expiresAt: sql`now() + interval '30 days'` });
       return { status: 'ok' as const, user };
     });
   } catch (error) {

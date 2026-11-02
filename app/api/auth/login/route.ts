@@ -3,7 +3,7 @@ import { unauthenticated } from '@/lib/api/problem';
 import { cookieHeaders, findRequestSession, toUserDto } from '@/lib/auth/http';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession, rotateSession } from '@/lib/auth/session';
-import { sessionsRepo } from '@/lib/repos/sessions';
+import { SessionNotRotatableError, sessionsRepo } from '@/lib/repos/sessions';
 import { unscopedFindUserByEmail } from '@/lib/repos/users';
 import { loginSchema, type LoginInput } from '@/lib/schemas/auth';
 
@@ -18,10 +18,14 @@ export const POST = apiHandler<LoginInput>(
     const previous = (await findRequestSession(req))?.session;
     let cookie: string;
     if (previous && previous.userId === user.id) {
-      // Rotación al iniciar sesión; si la anterior ya no sirve, se crea una nueva.
-      cookie = await rotateSession(user.id, previous.id, userAgent)
-        .then((r) => r.cookie)
-        .catch(async () => (await createSession(user.id, userAgent)).cookie);
+      // Rotación al iniciar sesión.
+      try {
+        cookie = (await rotateSession(user.id, previous.id, userAgent)).cookie;
+      } catch (error) {
+        // Sólo la carrera "ya revocada/inexistente" se resuelve creando otra; el resto es un 500.
+        if (!(error instanceof SessionNotRotatableError)) throw error;
+        cookie = (await createSession(user.id, userAgent)).cookie;
+      }
     } else {
       if (previous) await sessionsRepo(previous.userId).revoke(previous.id);
       cookie = (await createSession(user.id, userAgent)).cookie;
