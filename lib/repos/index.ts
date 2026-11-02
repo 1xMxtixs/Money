@@ -3,4 +3,5 @@ export {
   sessionsRepo,
   unscopedFindSessionByTokenHash,
   type CreateSessionInput,
+  type Session,
 } from './sessions';
