@@ -4,6 +4,14 @@ import { sessions, type Session, type NewSession } from '@/lib/db/schema';
 
 export type { Session };
 
+/** La sesión a rotar no existe, no es del usuario o ya está revocada. */
+export class SessionNotRotatableError extends Error {
+  constructor(oldSessionId: string) {
+    super(`Cannot rotate session ${oldSessionId}: not found or already revoked.`);
+    this.name = 'SessionNotRotatableError';
+  }
+}
+
 export type CreateSessionInput = Omit<NewSession, 'userId' | 'expiresAt'> & {
   expiresAt?: Date | SQL;
 };
@@ -174,9 +182,7 @@ export function sessionsRepo(userId: string) {
           .returning({ id: sessions.id });
 
         if (revoked.length === 0) {
-          throw new Error(
-            `Cannot rotate session: session ${oldSessionId} not found or already revoked for user ${userId}.`
-          );
+          throw new SessionNotRotatableError(oldSessionId);
         }
 
         const [newSession] = await tx

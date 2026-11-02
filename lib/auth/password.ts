@@ -2,6 +2,9 @@ import crypto from 'node:crypto';
 import type { Algorithm } from '@node-rs/argon2';
 import { hash, verify } from '@node-rs/argon2';
 import { COMMON_PASSWORDS_SET } from './common-passwords';
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '@/lib/schemas/limits';
+
+export { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH };
 
 /**
  * Argon2id password hashing and constant-time verification parameters (SP-01 / RF-002 / doc 7 §2, §3).
@@ -23,8 +26,6 @@ export const ARGON2_PARAMS = Object.freeze({
 });
 
 
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 128;
 
 /**
  * Decoy hash initialized on module load (SP-01 / T-05 / RF-010).

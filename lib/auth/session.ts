@@ -67,6 +67,21 @@ export function buildClearedSessionCookie(): string {
 }
 
 /**
+ * Genera el testigo y los datos persistibles de una sesión SIN tocar la base de datos,
+ * para poder insertarla dentro de otra transacción (alta, F0-12).
+ */
+export function prepareSession(userAgent?: string | null): {
+  data: { id: string; tokenHash: string; userAgent: string | null };
+  cookie: string;
+} {
+  const token = generateSessionToken();
+  return {
+    data: { id: uuidv7(), tokenHash: hashSessionToken(token), userAgent: sanitizeUserAgent(userAgent) },
+    cookie: buildSessionCookie(token),
+  };
+}
+
+/**
  * Creates a new opaque database session for the specified user (AD-05 / doc 7 §4).
  * Returns the cleartext token ONLY in memory for cookie emission; the database
  * exclusively persists sha256(token).

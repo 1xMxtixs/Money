@@ -142,6 +142,9 @@ export interface ApiHandlerContext<TBody = unknown, TParams = Record<string, str
   params: TParams;
 }
 
+export type ApiRouteFn<TParams> = ((req: Request) => Promise<Response>) &
+  ((req: Request, routeContext: { params: Promise<TParams> }) => Promise<Response>);
+
 export interface ApiHandlerOptions<TBody> {
   bodySchema?: z.ZodType<TBody>;
   maxBodyBytes?: number;
@@ -155,7 +158,7 @@ export function apiHandler<TBody = unknown, TParams = Record<string, string>>(
   handler: (ctx: ApiHandlerContext<TBody, TParams>) => Promise<Response | unknown>,
   options?: ApiHandlerOptions<TBody>
 ) {
-  return async (
+  const route = async (
     req: Request,
     routeContext?: { params?: Promise<TParams> | TParams }
   ): Promise<Response> => {
@@ -235,4 +238,6 @@ export function apiHandler<TBody = unknown, TParams = Record<string, string>>(
       });
     }
   };
+  // Next 15 valida que el segundo argumento del manejador sea obligatorio (un `?` rompe el build).
+  return route as ApiRouteFn<TParams>;
 }
