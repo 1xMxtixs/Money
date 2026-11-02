@@ -46,7 +46,15 @@
     "invalidCredentials": "Email or password do not match.",
     "sessionExpired": "Your session has expired. Please log in again.",
     "accountCreated": "Account created successfully.",
-    "passwordResetSent": "If the email exists, we have sent instructions."
+    "passwordResetSent": "If the email exists, we have sent instructions.",
+    "submitLogin": "Sign in",
+    "submitRegister": "Create account",
+    "goToRegister": "Have an invitation? Create your account",
+    "goToLogin": "Already have an account? Sign in",
+    "invitationInvalid": "The invitation code is invalid, already used or expired.",
+    "emailTaken": "That email is already registered.",
+    "passwordCommonWarning": "Your account is created. Note: that password is very common; consider changing it soon.",
+    "continue": "Continue"
   },
   "validation": {
     "required": "This field is required.",
