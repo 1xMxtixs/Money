@@ -46,7 +46,15 @@
     "invalidCredentials": "El correo o la contraseña no coinciden.",
     "sessionExpired": "Tu sesión ha expirado. Por favor ingresa nuevamente.",
     "accountCreated": "Cuenta creada con éxito.",
-    "passwordResetSent": "Si el correo existe, te hemos enviado instrucciones."
+    "passwordResetSent": "Si el correo existe, te hemos enviado instrucciones.",
+    "submitLogin": "Entrar",
+    "submitRegister": "Crear cuenta",
+    "goToRegister": "¿Tienes una invitación? Crea tu cuenta",
+    "goToLogin": "¿Ya tienes cuenta? Accede",
+    "invitationInvalid": "El código de invitación no es válido, ya se usó o caducó.",
+    "emailTaken": "Ese correo ya está registrado.",
+    "passwordCommonWarning": "Tu cuenta está creada. Ojo: esa contraseña es muy común; considera cambiarla pronto.",
+    "continue": "Continuar"
   },
   "validation": {
     "required": "Este campo es obligatorio.",

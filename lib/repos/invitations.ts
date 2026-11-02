@@ -67,3 +67,8 @@ export async function unscopedIsInvitationRedeemable(
     .limit(1);
   return Boolean(row);
 }
+
+/** Borrado por id; sólo para limpieza de pruebas (el flujo normal nunca borra invitaciones). */
+export async function unscopedDeleteInvitation(id: string): Promise<void> {
+  await db.delete(invitations).where(eq(invitations.id, id));
+}
