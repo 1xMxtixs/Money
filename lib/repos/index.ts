@@ -1,4 +1,11 @@
-export { usersRepo, type UpdateUserInput } from './users';
+export {
+  usersRepo,
+  unscopedFindUserByEmail,
+  unscopedRegisterUser,
+  type User,
+  type UpdateUserInput,
+  type RegisterUserResult,
+} from './users';
 export {
   sessionsRepo,
   unscopedFindSessionByTokenHash,
@@ -8,6 +15,7 @@ export {
 export {
   unscopedCreateInvitation,
   unscopedRedeemInvitation,
+  unscopedIsInvitationRedeemable,
   type Invitation,
   type InvitationExecutor,
 } from './invitations';

@@ -51,3 +51,23 @@ export async function unscopedRedeemInvitation(
 
   return row ?? null;
 }
+
+/** Lectura sin efectos: ¿el código podría canjearse ahora con este correo? */
+export async function unscopedIsInvitationRedeemable(
+  codeHash: string,
+  email: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.codeHash, codeHash),
+        isNull(invitations.redeemedAt),
+        gt(invitations.expiresAt, sql`now()`),
+        or(isNull(invitations.invitedEmail), sql`lower(${invitations.invitedEmail}) = lower(${email})`)
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
