@@ -6,8 +6,8 @@ import { z } from 'zod';
  * CRITICAL:
  * Every API request object schema must use strictObject or .strict() so unknown fields fail with 422.
  */
-export function strictObject<T extends z.ZodRawShape>(shape: T) {
-  return z.object(shape).strict();
+export function strictObject<T extends z.core.$ZodShape>(shape: T) {
+  return z.strictObject(shape);
 }
 
 /**
@@ -56,78 +56,69 @@ export const dateStringSchema = boundedString(10, 10).regex(
   'Date must be in YYYY-MM-DD format'
 );
 
-export const isoDateTimeSchema = boundedString(64, 1).datetime({
-  message: 'Timestamp must be ISO-8601 UTC string',
-});
+export const isoDateTimeSchema = boundedString(64, 1).datetime({ error: 'Timestamp must be ISO-8601 UTC string' });
 
 export const paginationCursorSchema = boundedString(500, 1).optional();
 
 /**
  * Recursively inspects whether a given Zod schema enforces strict object validation
  * across its entire shape hierarchy (Hueco 1 / T2 / RNF-SE-04).
+ *
+ * Zod 4: refinements are checks (no wrapper) and transforms are pipes, so the walk
+ * dispatches on the public `_zod.def.type` discriminator.
  */
-export function isStrictSchema(schema: z.ZodTypeAny): boolean {
+export function isStrictSchema(schema: z.ZodType): boolean {
   if (!schema || typeof schema !== 'object') {
     return true;
   }
 
-  // ZodEffects (.refine, .transform)
-  if (schema instanceof z.ZodEffects) {
-    return isStrictSchema(schema.innerType());
-  }
+  // Structural view of the zod 4 def; fields vary per type.
+  const def = schema._zod.def as unknown as {
+    type: string;
+    innerType?: z.ZodType;
+    element?: z.ZodType;
+    valueType?: z.ZodType;
+    options?: z.ZodType[];
+    items?: z.ZodType[];
+    rest?: z.ZodType | null;
+    left?: z.ZodType;
+    right?: z.ZodType;
+    in?: z.ZodType;
+    out?: z.ZodType;
+    shape?: Record<string, z.ZodType>;
+    catchall?: z.ZodType;
+  };
+  const all = (list: Array<z.ZodType | null | undefined>) =>
+    list.every((s) => !s || isStrictSchema(s));
 
-  // ZodOptional / ZodNullable / ZodDefault / ZodCatch / ZodReadonly
-  if (
-    schema instanceof z.ZodOptional ||
-    schema instanceof z.ZodNullable ||
-    schema instanceof z.ZodDefault ||
-    schema instanceof z.ZodCatch ||
-    schema instanceof z.ZodReadonly
-  ) {
-    return isStrictSchema(schema._def.innerType);
-  }
-
-  // ZodArray
-  if (schema instanceof z.ZodArray) {
-    return isStrictSchema(schema.element);
-  }
-
-  // ZodRecord
-  if (schema instanceof z.ZodRecord) {
-    return isStrictSchema(schema.valueSchema);
-  }
-
-  // ZodUnion / ZodDiscriminatedUnion
-  if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
-    return (schema.options as z.ZodTypeAny[]).every((opt: z.ZodTypeAny) =>
-      isStrictSchema(opt)
-    );
-  }
-
-  // ZodPipeline
-  if (schema instanceof z.ZodPipeline) {
-    return isStrictSchema(schema._def.in) && isStrictSchema(schema._def.out);
-  }
-
-  // ZodObject: MUST have unknownKeys === 'strict' AND all properties in shape must be strict
-  if (schema instanceof z.ZodObject) {
-    if (schema._def.unknownKeys !== 'strict') {
-      return false;
-    }
-
-    const shape =
-      typeof schema._def.shape === 'function'
-        ? schema._def.shape()
-        : schema.shape;
-
-    for (const key of Object.keys(shape)) {
-      if (!isStrictSchema(shape[key])) {
+  switch (def.type) {
+    case 'optional':
+    case 'nullable':
+    case 'default':
+    case 'prefault':
+    case 'catch':
+    case 'readonly':
+    case 'nonoptional':
+      return all([def.innerType]);
+    case 'array':
+      return all([def.element]);
+    case 'record':
+      return all([def.valueType]);
+    case 'union':
+      return all(def.options ?? []);
+    case 'tuple':
+      return all([...(def.items ?? []), def.rest]);
+    case 'intersection':
+      return all([def.left, def.right]);
+    case 'pipe':
+      return all([def.in, def.out]);
+    case 'object':
+      // strict <=> catchall is z.never()
+      if (def.catchall?._zod.def.type !== 'never') {
         return false;
       }
-    }
-
-    return true;
+      return all(Object.values(def.shape ?? {}));
+    default:
+      return true;
   }
-
-  return true;
 }
